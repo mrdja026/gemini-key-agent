@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "tsx -r dotenv/config index.ts",
-    "dev": "tsx -r dotenv/config --watch index.ts"
+    "dev": "tsx -r dotenv/config --watch index.ts",
+    "server": "tsx src/server.ts"
   },
   "keywords": [],
   "author": "",
@@ -18,6 +19,11 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "dotenv": "^17.2.3"
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "body-parser": "^2.2.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1"
   }
 }

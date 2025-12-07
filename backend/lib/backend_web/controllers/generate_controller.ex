@@ -77,13 +77,19 @@ defmodule BackendWeb.GenerateController do
     prompt = params["prompt"]
     contents = params["contents"] || []
 
-    case Generator.generate(prompt, contents) do
-      {:ok, result} ->
-        json(conn, result)
-      {:error, reason} ->
-        conn
-        |> put_status(:bad_request)
-        |> json(%{error: reason})
+    if is_nil(prompt) or prompt == "" do
+      conn
+      |> put_status(:bad_request)
+      |> json(%{error: "Missing required field: 'prompt'"})
+    else
+      case Generator.generate(prompt, contents) do
+        {:ok, result} ->
+          json(conn, result)
+        {:error, reason} ->
+          conn
+          |> put_status(:bad_request)
+          |> json(%{error: reason})
+      end
     end
   end
 end
