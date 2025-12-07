@@ -5,6 +5,30 @@ defmodule Backend.Gemini.Client do
   require Logger
 
   @sidecar_url "http://localhost:4001/api/generate"
+  @sidecar_image_url "http://localhost:4001/api/generate-image"
+
+  @doc """
+  Generates an image by delegating to the Sidecar service.
+
+  ## Parameters
+  - prompt: The user's input prompt for image generation.
+  """
+  def generate_image(prompt) do
+    payload = %{prompt: prompt}
+
+    case Req.post(@sidecar_image_url, json: payload) do
+      {:ok, %Req.Response{status: 200, body: body}} ->
+        {:ok, body}
+
+      {:ok, %Req.Response{status: status, body: body}} ->
+        Logger.error("Sidecar image generation error #{status}: #{inspect(body)}")
+        {:error, "Sidecar image generation failed with status #{status}"}
+
+      {:error, exception} ->
+        Logger.error("Sidecar image generation connection failed: #{inspect(exception)}")
+        {:error, "Failed to connect to Sidecar for image generation"}
+    end
+  end
 
   @doc """
   Generates a story by delegating to the Sidecar service.
