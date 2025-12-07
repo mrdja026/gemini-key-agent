@@ -1,9 +1,59 @@
+console.log('[DEBUG] Script started');
+
 import express from 'express';
+console.log('[DEBUG] express imported');
+
 import cors from 'cors';
 import bodyParser from 'body-parser';
 import { GeminiBuilder } from './GeminiBuilder.js';
+console.log('[DEBUG] GeminiBuilder imported');
+
 import { v2 as cloudinary } from 'cloudinary';
-import 'dotenv/config';
+console.log('[DEBUG] cloudinary imported');
+
+import { ImageService } from './ImageService.js';
+console.log('[DEBUG] ImageService imported');
+
+import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import path from 'path';
+import fs from 'fs';
+
+console.log('[DEBUG] Imports complete');
+
+// Robust Env Loading
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootEnv = path.resolve(__dirname, '../.env');
+const cwdEnv = path.resolve(process.cwd(), '.env');
+
+console.log(
+  `[Sidecar] Loading env. __dirname: ${__dirname}, CWD: ${process.cwd()}`,
+);
+
+if (fs.existsSync(rootEnv)) {
+  console.log(`[Sidecar] Loading .env from ${rootEnv}`);
+  dotenv.config({ path: rootEnv });
+} else if (fs.existsSync(cwdEnv)) {
+  console.log(`[Sidecar] Loading .env from ${cwdEnv}`);
+  dotenv.config({ path: cwdEnv });
+} else {
+  console.warn(`[Sidecar] WARNING: .env not found in ${rootEnv} or ${cwdEnv}`);
+}
+
+// Global Error Handlers
+process.on('uncaughtException', (err) => {
+  console.error('[Sidecar] Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error(
+    '[Sidecar] Unhandled Rejection at:',
+    promise,
+    'reason:',
+    reason,
+  );
+});
 
 const app = express();
 const PORT = process.env.SIDECAR_PORT || 4001;
@@ -16,8 +66,7 @@ const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
 const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
 
 if (!CLOUDINARY_CLOUD_NAME || !CLOUDINARY_API_KEY || !CLOUDINARY_API_SECRET) {
-  console.error('CRITICAL: Cloudinary credentials not found in env.');
-  process.exit(1);
+  console.error('[Sidecar] CRITICAL: Cloudinary credentials not found in env.');
 }
 
 cloudinary.config({
@@ -27,14 +76,16 @@ cloudinary.config({
 });
 
 if (!API_KEY) {
-  console.error('CRITICAL: GEMINI_API_KEY not found in env.');
-  process.exit(1);
+  console.error('[Sidecar] CRITICAL: GEMINI_API_KEY not found in env.');
 }
 
 if (!STABILITY_API_KEY) {
-  console.error('CRITICAL: STABILITY_API_KEY not found in env.');
-  process.exit(1);
+  console.error('[Sidecar] CRITICAL: STABILITY_API_KEY not found in env.');
 }
+
+console.log('[DEBUG] Initializing ImageService');
+const imageService = new ImageService(API_KEY || '', STABILITY_API_KEY || '');
+console.log('[DEBUG] ImageService initialized');
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -57,6 +108,10 @@ app.post('/api/generate', async (req, res) => {
     console.log(
       `[Sidecar] Received request. Prompt: "${prompt.substring(0, 50)}..."`,
     );
+
+    if (!API_KEY) {
+      throw new Error('GEMINI_API_KEY is missing');
+    }
 
     const builder = new GeminiBuilder(API_KEY, systemPrompt);
 
@@ -90,83 +145,9 @@ app.post('/api/generate-image', async (req, res) => {
       `[Sidecar] Received image generation request. Prompt: "${prompt}"`,
     );
 
-    // 1. Refine Prompt
-    const refinerSystemPrompt = `You are an expert prompt generator for gemini nano banana that will take this prompt and generate a specific, high-quality prompt for image generation. If the prompt is too vauge you will do your best token prediction to enhance it. RETURN ONLY FIRST AND BEST PROMPT`;
-    const refiner = new GeminiBuilder(API_KEY, refinerSystemPrompt);
-    const refinedPrompt = await refiner.text(prompt).generate();
+    const result = await imageService.generateImage(prompt);
 
-    console.log(`[Sidecar] Refined Prompt: "${refinedPrompt}"`);
-
-    // 2. Generate Image
-    // Using Stability AI "Stable Image Core"
-    console.log(`[Sidecar] Generating image with Stability AI Core...`);
-
-    const formData = new FormData();
-    formData.append('prompt', refinedPrompt);
-    formData.append('output_format', 'png');
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
-
-    try {
-      const response = await fetch(
-        'https://api.stability.ai/v2beta/stable-image/generate/core',
-        {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${STABILITY_API_KEY}`,
-            Accept: 'image/*',
-          },
-          body: formData,
-          signal: controller.signal,
-        },
-      );
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(
-          `[Sidecar] Stability AI Error (${response.status}):`,
-          errorText,
-        );
-        throw new Error(
-          `Stability AI generation failed: ${response.status} ${response.statusText} - ${errorText}`,
-        );
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const base64Image = buffer.toString('base64');
-
-      // Upload to Cloudinary
-      console.log('[Sidecar] Uploading to Cloudinary...');
-      const uploadResult = await cloudinary.uploader.upload(
-        `data:image/png;base64,${base64Image}`,
-        {
-          upload_preset: 'ml_default',
-        },
-      );
-      console.log(
-        `[Sidecar] Uploaded to Cloudinary: ${uploadResult.secure_url}`,
-      );
-
-      console.log(`[Sidecar] Image Generation Complete.`);
-
-      res.json({
-        refinedPrompt,
-        image: {
-          mimeType: 'image/png',
-          data: base64Image,
-          url: uploadResult.secure_url,
-        },
-      });
-    } catch (error: any) {
-      if (error.name === 'AbortError') {
-        console.error('[Sidecar] Stability AI Request Timed Out');
-        throw new Error('Image generation timed out after 60 seconds');
-      }
-      throw error;
-    }
+    res.json(result);
   } catch (error: any) {
     console.error('[Sidecar] Image Generation Error:', error);
     res.status(500).json({
@@ -175,10 +156,15 @@ app.post('/api/generate-image', async (req, res) => {
     });
   }
 });
+
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'gemini-sidecar' });
 });
 
+console.log('[DEBUG] Starting server listen...');
 app.listen(PORT, () => {
   console.log(`Gemini Sidecar running on http://localhost:${PORT}`);
 });
+
+// Keep process alive
+setInterval(() => {}, 1000 * 60 * 60);

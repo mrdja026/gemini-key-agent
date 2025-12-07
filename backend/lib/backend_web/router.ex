@@ -10,6 +10,7 @@ defmodule BackendWeb.Router do
     pipe_through :api
     get "/health", HealthController, :index
     post "/generate", GenerateController, :index
+    post "/generate-image", GenerateController, :generate_image
   end
 
   scope "/" do

@@ -32,6 +32,44 @@ defmodule BackendWeb.GenerateController do
     })
   end
 
+  defmodule GenerateImageRequest do
+    require OpenApiSpex
+    alias OpenApiSpex.Schema
+
+    OpenApiSpex.schema(%{
+      title: "GenerateImageRequest",
+      description: "Request to generate an image",
+      type: :object,
+      properties: %{
+        prompt: %Schema{type: :string, description: "The prompt to send to Stability AI", example: "A futuristic city"}
+      },
+      required: [:prompt]
+    })
+  end
+
+  defmodule GenerateImageResponse do
+    require OpenApiSpex
+    alias OpenApiSpex.Schema
+
+    OpenApiSpex.schema(%{
+      title: "GenerateImageResponse",
+      description: "Response from Image Generation",
+      type: :object,
+      properties: %{
+        refinedPrompt: %Schema{type: :string, description: "The refined prompt used for generation"},
+        image: %Schema{
+          type: :object,
+          description: "Image data",
+          properties: %{
+            mimeType: %Schema{type: :string},
+            data: %Schema{type: :string, description: "Base64 encoded image data"},
+            url: %Schema{type: :string, description: "URL to the image"}
+          }
+        }
+      }
+    })
+  end
+
   defmodule GenerateResponse do
     require OpenApiSpex
     alias OpenApiSpex.Schema
@@ -63,6 +101,34 @@ defmodule BackendWeb.GenerateController do
       ok: {"Successful generation", "application/json", GenerateResponse},
       unprocessable_entity: {"Bad Request", "application/json", OpenApiSpex.Schema}
     ]
+
+  operation :generate_image,
+    summary: "Generate Image",
+    description: "Generates an image using Stability AI based on prompt.",
+    request_body: {"Generate Image Request", "application/json", GenerateImageRequest},
+    responses: [
+      ok: {"Successful generation", "application/json", GenerateImageResponse},
+      unprocessable_entity: {"Bad Request", "application/json", OpenApiSpex.Schema}
+    ]
+
+  def generate_image(conn, params) do
+    prompt = params["prompt"]
+
+    if is_nil(prompt) or prompt == "" do
+      conn
+      |> put_status(:bad_request)
+      |> json(%{error: "Missing required field: 'prompt'"})
+    else
+      case Generator.generate_image(prompt) do
+        {:ok, result} ->
+          json(conn, result)
+        {:error, reason} ->
+          conn
+          |> put_status(:bad_request)
+          |> json(%{error: reason})
+      end
+    end
+  end
 
   def index(conn, params) do
     # OpenApiSpex automatically casts/validates params before this if cleaner is used,

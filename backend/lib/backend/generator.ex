@@ -34,4 +34,14 @@ defmodule Backend.Generator do
        error -> error
     end
   end
+
+  def generate_image(prompt) when is_binary(prompt) do
+    case Client.generate_image(prompt) do
+      {:ok, result} ->
+        # Result is %{"refinedPrompt" => "...", "image" => %{...}}
+        {:ok, result}
+
+      error -> error
+    end
+  end
 end
