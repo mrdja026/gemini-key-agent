@@ -56,16 +56,7 @@ defmodule BackendWeb.GenerateController do
       description: "Response from Image Generation",
       type: :object,
       properties: %{
-        refinedPrompt: %Schema{type: :string, description: "The refined prompt used for generation"},
-        image: %Schema{
-          type: :object,
-          description: "Image data",
-          properties: %{
-            mimeType: %Schema{type: :string},
-            data: %Schema{type: :string, description: "Base64 encoded image data"},
-            url: %Schema{type: :string, description: "URL to the image"}
-          }
-        }
+        image_url: %Schema{type: :string, description: "URL to the generated image"}
       }
     })
   end
@@ -121,7 +112,11 @@ defmodule BackendWeb.GenerateController do
     else
       case Generator.generate_image(prompt) do
         {:ok, result} ->
-          json(conn, result)
+          # result is %{"refinedPrompt" => "...", "image" => %{"url" => "...", ...}}
+          # We want to return only the image URL as a simple JSON object or string
+          image_url = result["image"]["url"]
+          json(conn, %{image_url: image_url})
+
         {:error, reason} ->
           conn
           |> put_status(:bad_request)

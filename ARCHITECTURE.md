@@ -100,6 +100,11 @@ graph TD
 - [ ] **Implement gRPC**:
     -   Migrate TS Sidecar to a gRPC Server.
     -   Generate Elixir client stubs.
+- [ ] Document adapter lifecycle and compatibility when core interface changes (versioned ports, dual-run v1/v2).
+- [ ] Add Redis cache layer configuration to adapter settings (write-through, TTL, invalidation events).
+- [ ] Add messaging adapters (NATS/Kafka) for pub/sub, broadcast, and command/event patterns.
+- [ ] Add Go client adapter alongside Elixir client to consume shared contract.
+- [ ] Clarify operational runbooks: `pnpm start` currently broken; use `npx tsx src/server.ts` to start the TS domain server until fixed.
 
 ### Phase 3: Scaling & Polyglot
 - [ ] **Deploy Centralized Service**: Move TS out of the Pod into a standalone Deployment.
