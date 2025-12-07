@@ -32,24 +32,14 @@ graph TD
     
     Domain -->|HTTPS| Google[Google Gemini API]
 ```
+**Sidecars**
+Currently Domain part is in @src and sever.ts and deployed as a sidecar to elixir (would be if we have any(
 
-### Component Roles
-
-| Component | Role | Responsibility |
-| :--- | :--- | :--- |
-| **Phoenix Backend** | **Gateway & Orchestrator** | Manages user connections (WebSockets), authentication, and high-concurrency request handling. Acts as the "Port" for the application. |
-| **TS Sidecar** | **Domain Logic** | Encapsulates prompt engineering, history management, and specific AI interactions. It is the "Adapter" implementation for intelligence. |
-| **Google API** | **External Provider** | The raw model provider. Accessed only via the TS Sidecar. |
-
----
-
----
-
-## 3. Target Architecture (Microservices & Polyglot)
+## 3. Target Architecture (Microservices & Polyglot) - Propozed
 
 To support multiple consumers (Elixir, Golang) and centralized domain logic, we will evolve from Sidecars to a **Centralized Microservice** architecture.
 
-### Target Topology (Istio/gRPC)
+### Target Topology (Istio/RPC)
 
 ```mermaid
 graph TD
@@ -82,9 +72,9 @@ graph TD
     *   All services (Elixir, TS, Go) and the Shared Libs (`.proto`) will be managed in a single **Nx Monorepo**.
     *   *Benefit*: Atomic commits for `.proto` changes and their generated code in all languages.
 2.  **Service Communication**:
-    *   **Protocol**: gRPC (Protobuf) for type-safe, high-performance internal calls.
+    *   **Protocol**: RPC (Protobuf) for type-safe, high-performance internal calls.
     *   **Routing**: Istio (or similar Service Mesh) to handle gRPC Load Balancing (L7) and "Emit vs Broadcast" patterns.
-    *   *Goal*: Elixir & Go clients treat the TS Service as a "Virtual IP", while Istio handles the complex long-lived connection balancing.
+    *   *Goal*: Elixir & Go clients treat the TS Service as a "Virtual IP", while Istio handles the complex long-lived connection balancing. (maybe, lol)
 
 ---
 
@@ -96,9 +86,9 @@ graph TD
 
 ### Phase 2: Standardization (Critical)
 - [ ] **Adopt Nx**: Restructure repo to host Elixir, TS, and future Go apps.
-- [ ] **Define gRPC Contracts**: Create `packages/protos` with `gemini.proto`.
-- [ ] **Implement gRPC**:
-    -   Migrate TS Sidecar to a gRPC Server.
+- [ ] **Define RPC Contracts**: Create `packages/protos` with `gemini.proto`.
+- [ ] **Implement RPC**:
+    -   Migrate TS Sidecar to a RPC Server.
     -   Generate Elixir client stubs.
 - [ ] Document adapter lifecycle and compatibility when core interface changes (versioned ports, dual-run v1/v2).
 - [ ] Add Redis cache layer configuration to adapter settings (write-through, TTL, invalidation events).
@@ -123,7 +113,7 @@ Since we are prototyping a high-scale architecture ("Google Scale"), we accept s
 *   **Load Balancing**: We assume an L7 Load Balancer (Istio/Linkerd) will be present in Production to handle gRPC persistent connections.
 
 ### Assumption: Statelessness
-*   The **TS Domain Service** is strictly stateless. All "Memory" must be passed in (via Request History) or retrieved from a fast L2 Cache (Redis) by the Service itself.
+*   The **TS Domain Service** is strictly stateless. All "Memory" must be passed in (via Request History) or retrieved from a fast L2 Cache (Redis) by the Service itself. Or it will have a different call to Gemini with Context Cache on (out of scope)
 
 ### Assumption: Cache Coherence
-*   We rely on **Write-Through** caching. The DB is the archive; Redis is the source of truth for active sessions. We accept the risk of cache invalidation bugs during the prototype phase.
+*   We rely on **Write-Through** caching. The DB is the archive; Redis is the source of truth for active sessions. We accept the risk of cache invalidation bugs during the prototype phase. - DB is the ultimate archive, **Inser chosen cache impl for active session** - decide later. 
